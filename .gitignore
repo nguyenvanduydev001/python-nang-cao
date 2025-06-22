@@ -1,0 +1,6 @@
+*.pdf
+*.xml
+__pycache__/
+log.txt
+# Bỏ môi trường ảo
+venv/
