@@ -10,6 +10,9 @@ import time
 import xml.etree.ElementTree as ET
 
 def open_browser(path_download):
+    # Tạo trình duyệt Chrome với các cài đặt để tự động tải file về thư mục chỉ định
+    # Không hỏi lại khi tải, tự động mở rộng cửa sổ, cho phép tải nhiều file
+    # Trả về đối tượng trình duyệt để dùng tiếp
     options = Options()
     options.add_argument("--start-maximized")
     prefs = {
@@ -26,6 +29,9 @@ def open_browser(path_download):
     return driver
 
 def retry_action(action_func, max_retries=2, *args, **kwargs):
+    # Thử chạy một hàm nào đó (ví dụ: tải hóa đơn) tối đa max_retries lần
+    # Nếu bị lỗi thì đợi 3 giây rồi thử lại
+    # Nếu vẫn lỗi thì báo lỗi cuối cùng
     last_exception = None
     for attempt in range(max_retries):
         try:
@@ -125,6 +131,15 @@ def process_van_e_invoice(driver, url, ma_so_thue, ma_tra_cuu):
         return False, f"fail: {type(e).__name__}: {str(e)}"
 
 def process_invoice(df):
+    # Tạo thư mục downloads nếu chưa có
+    # Với mỗi dòng trong file Excel:
+    #   - Mở trình duyệt mới
+    #   - Lấy mã số thuế, mã tra cứu, URL
+    #   - Nếu thiếu mã tra cứu thì bỏ qua
+    #   - Gọi hàm xử lý phù hợp với từng loại URL (fpt, meinvoice, van.ehoadon)
+    #   - Lưu lại trạng thái thành công/thất bại
+    #   - Đóng trình duyệt
+    # Thêm cột 'status' vào DataFrame kết quả
     path_folder = "downloads"
     os.makedirs(path_folder, exist_ok=True)
     path_download = os.path.abspath(path_folder)
@@ -165,10 +180,14 @@ def process_invoice(df):
     return df
 
 def doc_input(file_path="input.xlsx"):
+    # Đọc file Excel thành DataFrame để xử lý
     df = pd.read_excel(file_path, dtype=str)
     return df
 
 def parse_invoice_xml(xml_path):
+    # Đọc file XML hóa đơn
+    # Trích xuất các trường: số hóa đơn, tên/mã số thuế/địa chỉ bên bán, bên mua, số tài khoản bán
+    # Nếu lỗi thì trả về các trường rỗng và báo lỗi
     try:
         tree = ET.parse(xml_path)
         root = tree.getroot()
@@ -213,6 +232,8 @@ def parse_invoice_xml(xml_path):
         }
 
 def process_all_xml(folder='downloads'):
+    # Lấy danh sách file XML trong thư mục
+    # Đọc từng file, trích xuất thông tin, lưu vào DataFrame
     data = []
     files = [f for f in os.listdir(folder) if f.endswith('.xml')]
     for file in files:
@@ -223,7 +244,8 @@ def process_all_xml(folder='downloads'):
     return pd.DataFrame(data)
 
 def merge_input_output(input_df, output_df):
-    # Gắn thông tin XML vào input theo thứ tự (nếu số lượng khớp)
+    # Gộp 2 bảng dữ liệu lại với nhau theo thứ tự
+    # Nếu số lượng dòng không khớp thì điền thiếu cho phù hợp
     if len(input_df) == len(output_df):
         merged = pd.concat([input_df.reset_index(drop=True), output_df.reset_index(drop=True)], axis=1)
     else:
@@ -234,12 +256,18 @@ def merge_input_output(input_df, output_df):
     return merged
 
 def save_to_excel(df, file_out='output.xlsx'):
-    # Xóa cột 'status_extract' nếu có
+    # Xóa cột status_extract nếu có
+    # Lưu DataFrame ra file Excel
     if 'status_extract' in df.columns:
         df = df.drop(columns=['status_extract'])
     df.to_excel(file_out, index=False)
 
 if __name__ == "__main__":
+    # Đọc file input.xlsx
+    # Tải hóa đơn và lưu trạng thái
+    # Đọc các file XML đã tải về, trích xuất thông tin
+    # Gộp kết quả lại
+    # Lưu ra file output.xlsx
     input_df = doc_input()
     download_status_df = process_invoice(input_df)
     output_df = process_all_xml("downloads")
